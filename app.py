@@ -1,79 +1,92 @@
 import os
 
 import openai
-from flask import Flask, redirect, render_template, request, url_for
+from flask import Flask, Blueprint, g, render_template, request, session
 
 import fitz
 
-app = Flask(__name__)
-openai.api_key = os.getenv("OPENAI_API_KEY")
+openai.api_key = os.getenv('OPENAI_API_KEY')
 
-m = []
+page = Blueprint('page', __name__, template_folder='templates')
+d = None
 
-@app.route("/", methods=("GET", "POST"))
+class Dialogue:
+    m = []
+    def __init__(self):
+        PROMPT = 'Here is unstructured deck data: \n'
+        self.add_message(PROMPT)
+
+    def add_message(self,msg):
+        self.m.append({'role': 'user', 'content': msg})
+        return self.m[-1]
+
+    def add_response(self,msg):
+        self.m.append(msg)
+        return self.m[-1]
+
+    def err_message(self,msg):
+        return [{'role': 'Error', 'content': msg}]
+
+    def reset(self):
+        self.m = []
+        self.__init__()
+
+def get_dialogue():
+    global d
+    if d is None:
+        print('init d')
+        d = Dialogue()
+    return d
+
+def create_app():
+    app = Flask(__name__)
+    app.register_blueprint(page)
+    return app
+        
+
+@page.route('/', methods=('GET', 'POST'))
 def index():
-    #if m == []:
-        #m.append(add_message("Here is unstructured deck data: \n\n"))
-        #m.append(add_message(read_deck()))
 
+    convo = get_dialogue()
 
-    if request.method == "POST":
-        if "prompt" in request.form:
-            if m == []:
-                print("no messages")
-                return redirect(url_for("index", result=[add_message("Error: No Deck")]))
-            p = request.form["prompt"]
-            print("pee")
+    if request.method == 'POST':
+        if 'prompt' in request.form:
+            p = request.form['prompt']
+            print('prompt')
             print(p)
-            m.append(add_message(p))
-            r = openapi_request(m)
-            m.append(r.choices[0].message)
-            return redirect(url_for("index", result=m))
-        elif "deck" in request.files:
-            f = request.files
-            print(f)
-            d = request.files["deck"]
-            print("reading:")
+            convo.add_message(p)
+            r = openapi_request(convo.m)
+            print(r)
+            convo.add_response(r.choices[0].message)
+            #return redirect(url_for('index', result=convo.m))
+            return render_template('index.html', result=convo.m)
+        elif 'deck' in request.files:
+            d = request.files['deck']
             print(d)
-            if d == "":
-                print("Error: empty file")
-                return redirect(url_for("index", result=[add_message("Error: Empty file")]))
-                
-            u = upload_deck(d)
-            m.append(add_message(u))
-            return redirect(url_for("index", result=m))
+            if d.filename == '':
+                print('Error: empty file')
+                print(convo.err_message('Empty File'))
+                return render_template('index.html', result=convo.err_message('Empty File'))
+                #return redirect(url_for('index', result=convo.err_message('Empty File')))
+            else:
+                convo.reset()
+                u = upload_deck(d)
+                convo.add_message(u)
+                return render_template('index.html', result=convo.m)
+                #return redirect(url_for('index', result=m))
 
-    result = request.args.get("result")
-    return render_template("index.html", result=m)
+    result = request.args.get('result')
+    return render_template('index.html', result=convo.m)
 
-def add_message(m):
-    return {"role": "user", "content": m}
-
-def to_html(ms):
-    for msg in ms:
-        msg["content"] = msg["content"].replace('\n', '<br>')
-    return
-
-def generate_prompt(animal):
-    return """Suggest three names for an animal that is a superhero.
-
-Animal: Cat
-Names: Captain Sharpclaw, Agent Fluffball, The Incredible Feline
-Animal: Dog
-Names: Ruff the Protector, Wonder Canine, Sir Barks-a-Lot
-Animal: {}
-Names:""".format(
-        animal.capitalize()
-    )
-
-@app.route("/models", methods=(["GET"]))
-def console():
+@page.route('/models', methods=(['GET']))
+def models():
     l = openai.Model.list()
     return(l)
 
+
 def openapi_request(msg):
     response = openai.ChatCompletion.create(
-        model="gpt-3.5-turbo",
+        model='gpt-3.5-turbo',
         messages=msg,
         temperature=0.6,
     )
@@ -82,14 +95,12 @@ def openapi_request(msg):
     return response
 
 def upload_deck(d):
-    print("uplaoding")
-    with fitz.open("pdf", d.read()) as doc:  # open document
+    print('uplaoding')
+    with fitz.open('pdf', d.read()) as doc:  # open document
         text = chr(12).join([page.get_text() for page in doc])
-        #print ("number of pages: %i" % doc.page_count)
+        #print ('number of pages: %i' % doc.page_count)
         print (doc.metadata)
 
-    print("read deck:")
-    print(text)
     return(text)
 
 def read_deck():
@@ -105,12 +116,12 @@ def read_deck():
 
         with fitz.open(doc_path) as doc:  # open document
             text = chr(12).join([page.get_text() for page in doc])
-            #print ("number of pages: %i" % doc.page_count)
+            #print ('number of pages: %i' % doc.page_count)
             print (doc.metadata)
 
-        print("read deck:")
+        print('read deck:')
         print(text)
         return(text)
         # write as a binary file to support non-ASCII characters
-        #pathlib.Path(d[:-4] + ".txt").write_bytes(text.encode())
+        #pathlib.Path(d[:-4] + '.txt').write_bytes(text.encode())
 
