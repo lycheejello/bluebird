@@ -12,6 +12,7 @@ m = []
 
 @app.route("/", methods=("GET", "POST"))
 def index():
+<<<<<<< HEAD
     #if m == []:
         #m.append(add_message("Here is unstructured deck data: \n\n"))
         #m.append(add_message(read_deck()))
@@ -42,6 +43,24 @@ def index():
             u = upload_deck(d)
             m.append(add_message(u))
             return redirect(url_for("index", result=m))
+=======
+    if m == []:
+        m.append(add_message("Here is unstructured deck data: \n\n"))
+        m.append(add_message(read_deck()))
+
+
+    if request.method == "POST":
+        p = request.form["prompt"]
+        m.append(add_message(p))
+        response = openai.ChatCompletion.create(
+            model="gpt-3.5-turbo",
+            messages=m,
+            temperature=0.6,
+        )
+        print(response)
+        m.append(response.choices[0].message)
+        return redirect(url_for("index", result=m))
+>>>>>>> ee66281e913bd29e44eba76403b4be3eb0781450
 
     result = request.args.get("result")
     return render_template("index.html", result=m)
@@ -71,6 +90,7 @@ def console():
     l = openai.Model.list()
     return(l)
 
+<<<<<<< HEAD
 def openapi_request(msg):
     response = openai.ChatCompletion.create(
         model="gpt-3.5-turbo",
@@ -92,6 +112,8 @@ def upload_deck(d):
     print(text)
     return(text)
 
+=======
+>>>>>>> ee66281e913bd29e44eba76403b4be3eb0781450
 
 def read_deck():
 
